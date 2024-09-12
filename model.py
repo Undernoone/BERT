@@ -7,8 +7,8 @@ import torch.nn as nn
 import torch.optim as optim
 import torch.utils.data as Data
 
-# Transformer_Embedding = Embedding + Positional_Encoding
-# BERT_Embedding = TokenEmbedding + Positional_Encoding + Segment_Embedding +
+# Transformer Embedding is a combination of word embedding and positional encoding
+# BERT's Embedding has an additional Segment Embedding feature
 
 # Demo，So I create a simple text, rather than a real text dataset.
 text = (
@@ -26,7 +26,7 @@ text = (
 # 使用正则表达式去除标点符号和换行符，并转换成小写
 # re.sub() 方法将[.,!?\'"-]替换为空格
 # split() 方法用于分割字符串，默认是以空格为分隔符
-# Perfect code! First, we create space, then we find split to split the sentences.
+# First, we create spaces, then we find spaces to split the sentences.
 sentences = re.sub(r'[.,!?\'"-]', '', text.lower()).split('\n')
 # Make sentences into a long string
 # Get the unique words in the text,because we need to get the index of each word.
@@ -34,6 +34,7 @@ sentences_join = " ".join(sentences)
 word_list = list(set(sentences_join.split()))
 
 word2idx = {'[PAD]' : 0, '[CLS]' : 1, '[SEP]' : 2, '[MASK]' : 3}
+# Create index to word dictionary
 # 例如，如果 word2idx 中有 {'hello': 4}，则 idx2word 会有 {4: 'hello'}
 for i, w in enumerate(word_list):
     word2idx[w] = i + 4
@@ -61,8 +62,6 @@ d_k = d_v = 64
 n_segments = 2
 
 def make_data():
-    #batch_size = 6
-    #max_pred = 5
     batch = []
     positive = negative = 0
     while positive != batch_size/2 or negative != batch_size/2:
@@ -141,7 +140,7 @@ False # IsNext or NotNext
 ] 
 """
 input_ids, segment_ids, masked_tokens, masked_pos, isNext = zip(*batch)
-input_ids = torch.LongTensor(input_ids),
+input_ids = torch.LongTensor(input_ids)
 segment_ids = torch.LongTensor(segment_ids)
 masked_tokens = torch.LongTensor(masked_tokens)
 masked_pos = torch.LongTensor(masked_pos)
@@ -273,22 +272,30 @@ class BERT(nn.Module):
         logits_lm = self.fc2(h_masked)
         return logits_lm, logits_clsf
 
+import matplotlib.pyplot as plt
+
 model = BERT()
 criterion = nn.CrossEntropyLoss()
 optimizer = optim.Adadelta(model.parameters(), lr=0.001)
 
+# 保存损失值
+losses = []
+
 for epoch in range(50):
+    epoch_loss = 0
     for input_ids, segment_ids, masked_tokens, masked_pos, isNext in loader:
         logits_lm, logits_clsf = model(input_ids, segment_ids, masked_pos)
         loss_lm = criterion(logits_lm.view(-1, vocab_size), masked_tokens.view(-1))
         loss_clsf = criterion(logits_clsf, isNext)
         loss = loss_lm + loss_clsf
-        if (epoch + 1) % 10 == 0:
-            print('Epoch:', '%04d' % (epoch + 1), 'loss =', '{:.6f}'.format(loss))
+        epoch_loss += loss.item()
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
-
+    avg_epoch_loss = epoch_loss / len(loader)
+    losses.append(avg_epoch_loss)
+    if (epoch + 1) % 10 == 0:
+        print(f'Epoch: {epoch + 1:04d}, loss = {avg_epoch_loss:.6f}')
 
 input_ids, segment_ids, masked_tokens, masked_pos, isNext = batch[1]
 print(text)
@@ -304,6 +311,14 @@ print('predict masked tokens list : ',[pos for pos in logits_lm if pos != 0])
 logits_clsf = logits_clsf.data.max(1)[1].data.numpy()[0]
 print('isNext : ', True if isNext else False)
 print('predict isNext : ',True if logits_clsf else False)
+
+plt.plot(range(1, 51), losses, label='Training Loss')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.title('Training Loss Curve')
+plt.legend()
+plt.grid(True)
+plt.show()
 
 
 
